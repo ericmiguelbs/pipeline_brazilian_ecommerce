@@ -1,0 +1,14 @@
+.env
+
+data/**/*.parquet
+
+venv/
+
+__pycache__/
+*.pyc
+*.pyo
+
+.vscode/
+
+.DS_Store
+Thumbs.db
