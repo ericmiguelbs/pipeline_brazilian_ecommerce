@@ -1,8 +1,7 @@
 .env
 
 data/**/*.parquet
-
-venv/
+.venv/
 
 __pycache__/
 *.pyc
