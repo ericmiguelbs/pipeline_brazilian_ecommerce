@@ -1,0 +1,17 @@
+services:
+  postgres_gold:
+    image: postgres:16-alpine
+    container_name: projeto_brazillian_ecommerce
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-dw_gold}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata_gold:/var/lib/postgresql/data
+
+volumes:
+  pgdata_gold:
+    driver: local

@@ -1,7 +1,15 @@
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 import pandas as pd
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.append(str(ROOT_DIR))
+
+from src.utils.database import engine
+
 
 load_dotenv()
 
@@ -45,7 +53,10 @@ def fato_vendas():
         - fato["order_estimated_delivery_date"]
     ).dt.total_seconds() / 86400
 
-    fato["foi_atrasado"] = (fato["dias_atraso"] > 0).astype(int)
+    fato["flag_atraso"] = (fato["dias_atraso"] > 0).astype(int)
 
-    fato.to_parquet(PASTA_GOLD_BI / "fato_vendas.parquet", index=False)
+    fato.to_sql(name="fato_vendas", con=engine,if_exists="replace", chunksize=5000,index=False, method="multi")
     print("fato_vendas criada com sucesso.")
+
+if __name__ == "__main__":
+    fato_vendas()

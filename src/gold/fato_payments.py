@@ -1,8 +1,17 @@
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 import pandas as pd
 import numpy as np
+
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.append(str(ROOT_DIR))
+
+from src.utils.database import engine
+
 
 load_dotenv()
 
@@ -51,7 +60,7 @@ def fato_payments():
 
     fato = fato.drop(columns=["order_purchase_timestamp"])
 
-    fato.to_parquet(PASTA_GOLD_BI / "fato_payments.parquet", index=False)
+    fato.to_sql(name="fato_pagamentos", con=engine, method="multi",chunksize=5000, if_exists="replace", index=False)
     print("Tabela fato payments criada")
 
 if __name__ == "__main__":

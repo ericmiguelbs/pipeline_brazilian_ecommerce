@@ -1,7 +1,14 @@
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 import pandas as pd
+
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.append(str(ROOT_DIR))
+
+from src.utils.database import engine
 
 load_dotenv()
 
@@ -26,7 +33,8 @@ def dim_calendario():
     df_calendario["trimestre"] = df_calendario["data"].dt.quarter
     df_calendario["eh_fim_de_semana"] = df_calendario["data"].dt.dayofweek >= 5
 
-    df_calendario.to_parquet(
-        PASTA_GOLD_BI / "dim_calendario.parquet", index=False
-    )
+    df_calendario.to_sql(name="dim_calendario",con=engine, if_exists="replace",chunksize=5000,method="multi",index=False)
     print("dim_calendario criada com sucesso.")
+
+if __name__ == "__main__":
+    dim_calendario()
