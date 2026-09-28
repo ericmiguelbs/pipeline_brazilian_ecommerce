@@ -8,8 +8,7 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
-from src.utils.database import engine
-
+from src.utils.database import df_to_postgres
 
 load_dotenv()
 
@@ -17,6 +16,7 @@ PASTA_SILVER = Path(os.getenv("PASTA_SILVER"))
 PASTA_GOLD_BI = Path(os.getenv("PASTA_GOLD_BI"))
 
 PASTA_GOLD_BI.mkdir(parents=True, exist_ok=True)
+
 
 def fato_vendas():
     df_orders = pd.read_parquet(PASTA_SILVER / "orders.parquet")
@@ -55,8 +55,9 @@ def fato_vendas():
 
     fato["flag_atraso"] = (fato["dias_atraso"] > 0).astype(int)
 
-    fato.to_sql(name="fato_vendas", con=engine,if_exists="replace", chunksize=5000,index=False, method="multi")
+    df_to_postgres(fato, "fato_vendas")
     print("fato_vendas criada com sucesso.")
+
 
 if __name__ == "__main__":
     fato_vendas()

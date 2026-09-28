@@ -1,13 +1,25 @@
+# Airflow logs
+logs/
+*.log
+
+# Variáveis de ambiente e segredos
 .env
 
-data/**/*.parquet
+# Ambientes virtuais Python
 .venv/
+venv/
+ENV/
 
+# Dados brutos e intermediários (Data Lake)
+dados/
+data/
+*.parquet
+*.csv
+
+# Cache do Python
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
 
-.vscode/
-
+# Arquivos do sistema
 .DS_Store
 Thumbs.db

@@ -8,7 +8,7 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
-from src.utils.database import engine
+from src.utils.database import df_to_postgres
 
 load_dotenv()
 
@@ -35,9 +35,9 @@ def dim_clientes():
         how="left",
     ).drop(columns=["geolocation_zip_code_prefix"])
 
-    dim_cliente.to_sql(name="dim_clientes",con=engine,if_exists="replace",method="multi",chunksize=5000,index=False)
-
+    df_to_postgres(dim_cliente, "dim_clientes")
     print("dim_clientes criada com sucesso.")
+
 
 if __name__ == "__main__":
     dim_clientes()
