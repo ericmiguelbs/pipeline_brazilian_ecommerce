@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from src.silver.utils import limpar_nome
+from src.silver.utils import limpar_nomes
 from src.config import spark
 from pyspark.sql import functions as F
 
@@ -16,7 +16,7 @@ def processar_sellers():
     df_sellers= (
         df_sellers
         .withColumn("seller_zip_code_prefix",F.lpad(F.col("seller_zip_code_prefix").cast("string"),5,"0"))
-        .withColumn("seller_city",limpar_nome(F.col("seller_city")))
+        .withColumn("seller_city",limpar_nomes(F.col("seller_city")))
         .withColumn("seller_state",F.upper(F.col("seller_state")))
         .withColumn("data_processamento_silver", F.current_timestamp())  
     )

@@ -2,61 +2,64 @@ import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
-import pandas as pd
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
-from src.utils.database import df_to_postgres
+from src.config import spark
+from pyspark.sql import functions as F
 
 load_dotenv()
 
 PASTA_SILVER = Path(os.getenv("PASTA_SILVER"))
-PASTA_GOLD_BI = Path(os.getenv("PASTA_GOLD_BI"))
 
-PASTA_GOLD_BI.mkdir(parents=True, exist_ok=True)
-
+PG_USER = os.getenv("POSTGRES_USER")
+PG_PASSWORD = os.getenv("POSTGRES_PASSWORD")
+PG_HOST = os.getenv("POSTGRES_HOST")
+PG_PORT = os.getenv("POSTGRES_PORT")
+PG_DB = os.getenv("POSTGRES_DB")
 
 def fato_vendas():
-    df_orders = pd.read_parquet(PASTA_SILVER / "orders.parquet")
-    df_items = pd.read_parquet(PASTA_SILVER / "order_items.parquet")
+    df_orders = spark.read.parquet(f"{PASTA_SILVER}/orders").select("order_id","customer_id","order_status","order_purchase_timestamp","order_delivered_customer_date","order_estimated_delivery_date")
+    df_items = spark.read.parquet(f"{PASTA_SILVER}/order_items")
 
-    fato = df_items.merge(
-        df_orders[
-            [
-                "order_id",
-                "customer_id",
-                "order_status",
-                "order_purchase_timestamp",
-                "order_delivered_customer_date",
-                "order_estimated_delivery_date",
-            ]
-        ],
-        on="order_id",
-        how="inner",
+    fato_vendas = (
+        df_items.join(
+            F.broadcast(df_orders),
+            on="order_id",
+            how="inner"
+        )
     )
 
-    fato["valor_total"] = fato["price"] + fato["freight_value"]
-
-    fato["data_compra"] = pd.to_datetime(
-        fato["order_purchase_timestamp"].dt.date
+    fato_vendas = (
+        fato_vendas
+        .withColumn("valor_total", (F.col("price") + F.col("freight_value")))
+        .withColumn("data_compra", F.col("order_purchase_timestamp"))
+        .withColumn("id_data_compra", F.date_format(F.col("data_compra"), "yyyyMMdd").cast("int"))
+        .withColumn("tempo_entrega_dias", F.datediff("order_delivered_customer_date","order_purchase_timestamp"))
+        .withColumn("dias_atraso", F.datediff("order_delivered_customer_date","order_estimated_delivery_date"))
+        .withColumn("flag_atraso", F.when(F.col("dias_atraso")>0,1).otherwise(0))
+        .withColumn("data_processamento_gold", F.current_timestamp())
+        .drop("order_purchase_timestamp")
     )
 
-    fato["tempo_entrega_dias"] = (
-        fato["order_delivered_customer_date"]
-        - fato["order_purchase_timestamp"]
-    ).dt.total_seconds() / 86400
+    URL_JDBC = f"jdbc:postgresql://{PG_HOST}:{PG_PORT}/{PG_DB}"
+    
+    (
+        fato_vendas.write
+        .format("jdbc")
+        .option("url", URL_JDBC)
+        .option("dbtable", "fato_vendas")
+        .option("user", PG_USER)
+        .option("password", PG_PASSWORD)
+        .option("driver", "org.postgresql.Driver")
+        .mode("overwrite")
+        .save()
+    )
+    
+    print("[GOLD] Tabela 'fato_vendas' inserida na base de dados com sucesso.")
 
-    fato["dias_atraso"] = (
-        fato["order_delivered_customer_date"]
-        - fato["order_estimated_delivery_date"]
-    ).dt.total_seconds() / 86400
-
-    fato["flag_atraso"] = (fato["dias_atraso"] > 0).astype(int)
-
-    df_to_postgres(fato, "fato_vendas")
-    print("fato_vendas criada com sucesso.")
 
 
 if __name__ == "__main__":

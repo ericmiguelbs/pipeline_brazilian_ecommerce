@@ -1,7 +1,6 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-import pandas as pd
 from src.config import spark
 from pyspark.sql import functions as F
 from pyspark.sql.types import ByteType

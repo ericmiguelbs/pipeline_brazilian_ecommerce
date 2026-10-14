@@ -2,47 +2,73 @@ import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
-import pandas as pd
-
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
-from src.utils.database import engine
+from src.config import spark
+from pyspark.sql import functions as F
 
 load_dotenv()
 
 PASTA_SILVER = Path(os.getenv("PASTA_SILVER"))
-PASTA_GOLD_BI = Path(os.getenv("PASTA_GOLD_BI"))
 
-PASTA_GOLD_BI.mkdir(parents=True, exist_ok=True)
+PG_USER = os.getenv("POSTGRES_USER")
+PG_PASSWORD = os.getenv("POSTGRES_PASSWORD")
+PG_HOST = os.getenv("POSTGRES_HOST")
+PG_PORT = os.getenv("POSTGRES_PORT")
+PG_DB = os.getenv("POSTGRES_DB")
+
 
 def dim_calendario():
-    df_orders = pd.read_parquet(PASTA_SILVER / "orders.parquet")
+    df_orders = spark.read.parquet(f"{PASTA_SILVER}/orders")
 
-    data_min = df_orders["order_purchase_timestamp"].min()
-    data_max = df_orders["order_purchase_timestamp"].max()
-
-    datas = pd.date_range(start=data_min.date(), end=data_max.date(), freq="D")
-    df_calendario = pd.DataFrame({"data": datas})
-
-    df_calendario["ano"] = df_calendario["data"].dt.year
-    df_calendario["mes"] = df_calendario["data"].dt.month
-    df_calendario["ano_mes"] = df_calendario["data"].dt.strftime("%Y-%m")
-    df_calendario["dia_semana"] = df_calendario["data"].dt.day_name()
-    df_calendario["trimestre"] = df_calendario["data"].dt.quarter
-    df_calendario["eh_fim_de_semana"] = df_calendario["data"].dt.dayofweek >= 5
-
-    df_calendario.to_sql(
-        name="dim_calendario",
-        con=engine,
-        if_exists="replace",
-        method="multi",
-        chunksize=5000,
-        index=False
+    limites = (
+        df_orders.agg(
+            F.min(F.to_date("order_purchase_timestamp")).alias("data_min"),
+            F.max(F.to_date("order_purchase_timestamp")).alias("data_max")
+        ).first()
     )
-    print("dim_calendario criada com sucesso.")
+
+    data_inicio = limites["data_min"].strftime("%Y-%m-%d")
+    data_fim = limites["data_max"].strftime("%Y-%m-%d")
+
+    df_datas = (
+        spark.sql(f"SELECT sequence(to_date('{data_inicio}'), to_date('{data_fim}'), interval 1 day) as datas")
+        .select(F.explode("datas").alias("data"))
+    )
+
+    df_calendario = (
+        df_datas
+        .withColumn("sk_data", F.date_format(F.col("data"),"yyyyMMdd").cast("int"))
+        .withColumn("ano", F.year(F.col("data")).cast("short"))
+        .withColumn("mes", F.month(F.col("data")).cast("byte"))
+        .withColumn("dia",F.dayofmonth(F.col("data")).cast("byte"))
+        .withColumn("trimestre", F.quarter(F.col("data")).cast("byte"))
+        .withColumn("dia_semana_num",F.dayofweek(F.col("data")).cast("byte"))
+        .withColumn("dia_semana_nome",F.date_format(F.col("data"), "EEEE"))
+        .withColumn("ano_mes", F.date_format(F.col("data"),"yyyy-MM"))
+        .withColumn("flag_fim_semana", F.when(F.dayofweek(F.col("data")).isin(1,7),F.lit(1)).otherwise(F.lit(0)).cast("byte"))
+        .withColumn("data_processamento_gold", F.current_timestamp())
+    )
+
+
+    URL_JDBC = f"jdbc:postgresql://{PG_HOST}:{PG_PORT}/{PG_DB}"
+
+    (
+        df_calendario.write
+        .format("jdbc")
+        .option("url", URL_JDBC)
+        .option("dbtable", "dim_calendario")
+        .option("user", PG_USER)
+        .option("password", PG_PASSWORD)
+        .option("driver", "org.postgresql.Driver")
+        .mode("overwrite")
+        .save()
+    )
+
+    print("[GOLD] Tabela 'dim_calendario' inserida na base de dados com sucesso.")
 
 if __name__ == "__main__":
     dim_calendario()

@@ -12,22 +12,18 @@ load_dotenv()
 PASTA_BRONZE = Path(os.getenv("PASTA_BRONZE"))
 PASTA_SILVER = Path(os.getenv("PASTA_SILVER"))
 
-caminho_ingestao = PASTA_BRONZE / "olist_customers_dataset"
 
 def processar_customers():
-    df_customers = spark.read.parquet(f"{PASTA_BRONZE}/olist_geolocation_dataset")
+    df_customers = spark.read.parquet(f"{PASTA_BRONZE}/olist_customers_dataset")
     df_customers = df_customers.dropDuplicates(["customer_id"])
 
-    df_customers = df_customers.withColumn(
-        "customer_zip_code_prefix",
-        F.lpad(F.col("customer_zip_code_prefix").cast(StringType()),5,"0")
+    df_customers = (
+        df_customers
+        .withColumn("customer_zip_code_prefix",F.lpad(F.col("customer_zip_code_prefix").cast(StringType()),5,"0"))
+        .withColumn("customer_city",limpar_nomes(F.col("customer_city")))
+        .withColumn("customer_state", F.upper(F.trim(F.col("customer_state"))))
+        .withColumn("data_processamento_silver", F.current_timestamp())
     )
-
-    df_customers = df_customers.withColumn("customer_city", limpar_nomes(F.col("customer_city")))
-
-    df_customers = df_customers.withColumn("customer_state", F.upper(F.trim(F.col("customer_state"))))
-
-    df_customers = df_customers.withColumn("data_processamento_silver", F.current_timestamp())
 
     PASTA_SILVER.mkdir(parents=True, exist_ok=True)
     caminho_saida = PASTA_SILVER / "customers"

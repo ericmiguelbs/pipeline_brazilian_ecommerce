@@ -3,7 +3,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 from src.config import spark
 from pyspark.sql import functions as F
-from pyspark.sql.types import ByteType
 
 load_dotenv()
 PASTA_BRONZE = Path(os.getenv("PASTA_BRONZE"))
