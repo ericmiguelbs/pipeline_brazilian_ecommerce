@@ -2,59 +2,39 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 import pandas as pd
-from src.silver.utils import limpar_nome_cidade
+from src.silver.utils import limpar_nome
+from src.config import spark
+from pyspark.sql import functions as F
+from pyspark.sql.types import StringType
 
 load_dotenv()
 PASTA_BRONZE = Path(os.getenv("PASTA_BRONZE"))
 PASTA_SILVER = Path(os.getenv("PASTA_SILVER"))
 
-
-def moda(serie):
-    return serie.mode().iloc[0] if not serie.mode().empty else None
-
-
 def processar_geolocation():
-    df_geolocation = pd.read_parquet(
-        PASTA_BRONZE / "olist_geolocation_dataset.parquet"
-    )
+    df_geolocation = spark.read.parquet(f"{PASTA_BRONZE}/olist_customers_dataset")
 
-    df_geolocation["geolocation_zip_code_prefix"] = (
-        df_geolocation["geolocation_zip_code_prefix"]
-        .astype(float)
-        .astype(int)
-        .astype(str)
-        .str.zfill(5)
-    )
-
-    df_geolocation["geolocation_city"] = (
-        df_geolocation["geolocation_city"].str.strip().str.title()
-    )
-    df_geolocation["geolocation_state"] = (
-        df_geolocation["geolocation_state"].str.strip().str.upper()
+    df_geolocation = (
+        df_geolocation
+        .withColumn("geolocation_zip_code_prefix",F.lpad(F.col("geolocation_zeip_code_prefix").cast(StringType()),5,"0"))
+        .withColumn("geolocation_city",F.trim(F.initcap(F.col("geolocation_city"))))
+        .withColumn("geolocation_state", F.trim(F.upper(F.col("geolocation_state"))))
     )
 
     df_geolocation_grouped = (
-        df_geolocation.groupby("geolocation_zip_code_prefix")
-        .agg(
-            {
-                "geolocation_lat": "median",
-                "geolocation_lng": "median",
-                "geolocation_city": moda,
-                "geolocation_state": moda,
-            }
+        df_geolocation.groupBy("geolocation_zip_code_prefix").agg(
+            F.percentile_approx("geolocaton_lat",0.5).alias("geolocation_lat"),
+            F.percentile_approx("geoloction_lng",0.5).alias("geolocation_lng"),
+            F.mode("geolocation_city").alias("geolocation_city"),
+            F.mode("geolocation_state").alias("geolocation_state")
         )
-        .reset_index()
+        .withColumn("data_processamento_silver", F.current_timestamp())
     )
-    df_geolocation_grouped["geolocation_city"] = df_geolocation_grouped[
-        "geolocation_city"
-    ].apply(limpar_nome_cidade)
-    df_geolocation_grouped["data_processamento_silver"] = pd.Timestamp.now()
 
     PASTA_SILVER.mkdir(parents=True, exist_ok=True)
-    df_geolocation_grouped.to_parquet(
-        PASTA_SILVER / "geolocation.parquet", index=False
-    )
-    print("geolocation.parquet processado com sucesso.")
+    caminho_saida = f"{PASTA_SILVER}/geolocation"
+    df_geolocation_grouped.write.mode("overwrite").parquet(caminho_saida)
+    print("[SILVER] Tabela 'geolocation' processada com sucesso.")
 
 
 if __name__ == "__main__":

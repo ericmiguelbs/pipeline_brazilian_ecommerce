@@ -1,37 +1,38 @@
 import os
+import pandas as pd
 from pathlib import Path
 from dotenv import load_dotenv
-import pandas as pd
-from src.silver.utils import limpar_nome_cidade
+from src.silver.utils import limpar_nomes
+
+from src.config import spark
+from pyspark.sql import functions as F
+from pyspark.sql.types import StringType
 
 load_dotenv()
 PASTA_BRONZE = Path(os.getenv("PASTA_BRONZE"))
 PASTA_SILVER = Path(os.getenv("PASTA_SILVER"))
 
+caminho_ingestao = PASTA_BRONZE / "olist_customers_dataset"
 
 def processar_customers():
-    df_customers = pd.read_parquet(PASTA_BRONZE / "olist_customers_dataset.parquet")
-    df_customers = df_customers.drop_duplicates(subset=["customer_id"])
+    df_customers = spark.read.parquet(f"{PASTA_BRONZE}/olist_geolocation_dataset")
+    df_customers = df_customers.dropDuplicates(["customer_id"])
 
-    df_customers["customer_zip_code_prefix"] = (
-        df_customers["customer_zip_code_prefix"]
-        .astype(float)
-        .astype(int)
-        .astype(str)
-        .str.zfill(5)
+    df_customers = df_customers.withColumn(
+        "customer_zip_code_prefix",
+        F.lpad(F.col("customer_zip_code_prefix").cast(StringType()),5,"0")
     )
 
-    df_customers["customer_city"] = df_customers["customer_city"].apply(
-        limpar_nome_cidade
-    )
-    df_customers["customer_state"] = (
-        df_customers["customer_state"].str.strip().str.upper()
-    )
-    df_customers["data_processamento_silver"] = pd.Timestamp.now()
+    df_customers = df_customers.withColumn("customer_city", limpar_nomes(F.col("customer_city")))
+
+    df_customers = df_customers.withColumn("customer_state", F.upper(F.trim(F.col("customer_state"))))
+
+    df_customers = df_customers.withColumn("data_processamento_silver", F.current_timestamp())
 
     PASTA_SILVER.mkdir(parents=True, exist_ok=True)
-    df_customers.to_parquet(PASTA_SILVER / "customers.parquet", index=False)
-    print("customers.parquet processado com sucesso.")
+    caminho_saida = PASTA_SILVER / "customers"
+    df_customers.write.mode("overwrite").parquet(str(caminho_saida))
+    print("[SILVER] Tabela 'customers' processada com sucesso.")
 
 
 if __name__ == "__main__":

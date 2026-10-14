@@ -4,11 +4,12 @@ from pathlib import Path
 from dotenv import load_dotenv
 import pandas as pd
 
+
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
-from src.utils.database import df_to_postgres
+from src.utils.database import engine
 
 load_dotenv()
 
@@ -16,7 +17,6 @@ PASTA_SILVER = Path(os.getenv("PASTA_SILVER"))
 PASTA_GOLD_BI = Path(os.getenv("PASTA_GOLD_BI"))
 
 PASTA_GOLD_BI.mkdir(parents=True, exist_ok=True)
-
 
 def dim_calendario():
     df_orders = pd.read_parquet(PASTA_SILVER / "orders.parquet")
@@ -34,9 +34,15 @@ def dim_calendario():
     df_calendario["trimestre"] = df_calendario["data"].dt.quarter
     df_calendario["eh_fim_de_semana"] = df_calendario["data"].dt.dayofweek >= 5
 
-    df_to_postgres(df_calendario, "dim_calendario")
+    df_calendario.to_sql(
+        name="dim_calendario",
+        con=engine,
+        if_exists="replace",
+        method="multi",
+        chunksize=5000,
+        index=False
+    )
     print("dim_calendario criada com sucesso.")
-
 
 if __name__ == "__main__":
     dim_calendario()

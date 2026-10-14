@@ -1,5 +1,6 @@
 import kagglehub
-import pandas as pd
+from src.config import spark
+from pyspark.sql import functions as F
 from pathlib import Path
 from dotenv import load_dotenv
 import os
@@ -26,12 +27,18 @@ if __name__ == "__main__":
     PASTA_BRONZE.mkdir(parents=True, exist_ok=True)
 
     for arquivo_csv in caminho.glob("*.csv"):
-        df = pd.read_csv(arquivo_csv)
+        df = (
+            spark.read.format("csv")
+            .option("header",True)
+            .option("inferSchema",True)
+            .load(str(arquivo_csv))
+        )
 
-        df['data_ingestao_bronze'] = pd.Timestamp.now()
-        df['arquivo_origem'] = arquivo_csv.name
+        df = df.withColumn("data_ingestao_bronze", F.current_timestamp())
+        df = df.withColumn("arquivo_origem", F.lit(arquivo_csv.name))
 
         nome_tabela = arquivo_csv.stem
-        caminho_saida = PASTA_BRONZE / f"{nome_tabela}.parquet"
-        df.to_parquet(caminho_saida, index=False)
-        print(f'Arquivo salvo: {caminho_saida}')
+        caminho_saida = PASTA_BRONZE / nome_tabela
+
+        df.write.mode("overwrite").parquet(str(caminho_saida))
+        print(f"Tabela salva em: {caminho_saida}")

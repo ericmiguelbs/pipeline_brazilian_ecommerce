@@ -38,16 +38,20 @@ x-airflow-common:
     AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW__API_AUTH__JWT_SECRET:-airflow_jwt_secret}
     AIRFLOW__API_AUTH__JWT_ISSUER: ${AIRFLOW__API_AUTH__JWT_ISSUER:-airflow}
     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
-    # Pacotes necessários para suas DAGs rodarem os tratamentos
     #_PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-pandas sqlalchemy psycopg2-binary pyarrow fastparquet}
     AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
+    JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+    PYTHONPATH: /opt/airflow
+    PASTA_BRONZE: /opt/airflow/dados/bronze
+    PASTA_SILVER: /opt/airflow/dados/silver
+
   volumes:
     - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
     - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
     - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
-    - ${AIRFLOW_PROJ_DIR:-.}/src:/opt/airflow/src        # Permite ao Airflow importar seu código
-    - ${AIRFLOW_PROJ_DIR:-.}/dados:/opt/airflow/dados    # Permite ao Airflow ler Bronze e Silver
+    - ${AIRFLOW_PROJ_DIR:-.}/src:/opt/airflow/src       
+    - ${AIRFLOW_PROJ_DIR:-.}/dados:/opt/airflow/dados   
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
     &airflow-common-depends-on
@@ -84,7 +88,6 @@ services:
       start_period: 30s
     restart: always
 
-  # SEU DATA WAREHOUSE (POSTGRESQL DA CAMADA GOLD)
   postgres_gold:
     image: postgres:16-alpine
     container_name: projeto_brazillian_ecommerce
