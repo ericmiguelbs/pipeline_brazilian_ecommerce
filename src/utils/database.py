@@ -10,10 +10,6 @@ PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres")
 PORT = os.getenv("POSTGRES_PORT", "5432")
 DB = os.getenv("POSTGRES_DB", "dw_gold")
 
-# Detecção automática de ambiente:
-# 1. Se estiver dentro de um contêiner Docker, o arquivo /.dockerenv existe.
-#    Nesse caso, utiliza o host interno da rede Docker ("postgres_gold").
-# 2. Se estiver rodando na máquina host (Windows), utiliza "localhost".
 DOCKER_ENV = os.path.exists("/.dockerenv")
 
 if DOCKER_ENV:
@@ -23,7 +19,6 @@ else:
 
 
 def get_connection():
-    """Retorna uma conexão ativa com o banco PostgreSQL dw_gold."""
     return psycopg2.connect(
         host=HOST,
         port=PORT,
@@ -34,14 +29,7 @@ def get_connection():
 
 
 def df_to_postgres(df, table_name, if_exists="replace"):
-    """
-    Grava um DataFrame no PostgreSQL utilizando psycopg2 e comando COPY.
-    
-    Parâmetros:
-        df         : pandas DataFrame
-        table_name : nome da tabela destino
-        if_exists  : 'replace' (recria tabela) ou 'append' (insere novos dados)
-    """
+
     conn = get_connection()
     try:
         with conn.cursor() as cur:
