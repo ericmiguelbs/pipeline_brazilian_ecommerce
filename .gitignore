@@ -12,7 +12,6 @@ ENV/
 
 # Dados brutos e intermediários (Data Lake)
 dados/
-data/
 *.parquet
 *.csv
 

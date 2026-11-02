@@ -100,6 +100,28 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata_gold:/var/lib/postgresql/data
+  
+  streamlit:
+    image: apache/airflow:2.9.1-python3.12 # Pode usar a mesma imagem base do worker
+    container_name: streamlit_dashboard
+    restart: always
+    depends_on:
+      - postgres_gold
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=postgres_gold
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB}
+      - PYTHONPATH=/opt/airflow
+    volumes:
+      - ./src:/opt/airflow/src
+    ports:
+      - "8501:8501"
+    command: >
+      bash -c "pip install streamlit plotly psycopg2-binary &&
+               streamlit run /opt/airflow/src/app/app.py --server.port=8501 --server.address=0.0.0.0"
+
 
   airflow-webserver:
     <<: *airflow-common
